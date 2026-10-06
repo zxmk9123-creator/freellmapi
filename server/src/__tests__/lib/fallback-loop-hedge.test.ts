@@ -121,7 +121,7 @@ describe('fallback loop time-budget hedging', () => {
     expect(h.onRoutingExhausted).not.toHaveBeenCalled();
   });
 
-  it('the hedge abort adds no cooldown, no skip, no extra failure beyond the retryable attempts', async () => {
+  it('the hedge abort adds a short transient cooldown for the stalled route, but no skip entry or logFailure row', async () => {
     const state = newFallbackState();
     const hedgeAbort = new AbortController();
     // Same ladder shape as above: two quick retryable failures let the third
@@ -149,10 +149,14 @@ describe('fallback loop time-budget hedging', () => {
     await runFallbackLoop(h);
 
     // The two 429s each produced their normal failure bookkeeping (a cooldown
-    // row and a skip entry); the hedge abort must NOT add a third of either —
-    // the budget expiring is not a provider-health signal.
+    // row and a skip entry). The hedge-aborted third attempt did NOT own
+    // enough of the budget to earn the full recordRetryableFailure() treatment
+    // — no skip entry, no model-failure-streak, no logFailure row — but it
+    // must no longer go completely unpenalized either: it gets its own short
+    // transient cooldown row so the route rests briefly instead of being
+    // re-picked and re-stalling on every subsequent request.
     const cooldowns = getDb().prepare('SELECT COUNT(*) AS n FROM rate_limit_cooldowns').get() as { n: number };
-    expect(cooldowns.n).toBe(2);
+    expect(cooldowns.n).toBe(3);
     expect(state.skipKeys.size).toBe(2);
     expect(state.skipModels.size).toBe(0);
     expect(h.logFailure).toHaveBeenCalledTimes(2);

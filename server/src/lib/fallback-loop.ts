@@ -29,6 +29,7 @@ import {
   getPaymentRequiredCooldownMs,
   getModelForbiddenCooldownMs,
   learnLimitFromError,
+  TRANSIENT_COOLDOWN_MS,
   type CooldownDecision,
   type CooldownSource,
 } from '../services/ratelimit.js';
@@ -1544,6 +1545,13 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
       // rate-limit signal, so cooldownDecisionForError keeps it light) plus the
       // gradual model-level sink, both of which decay on their own if the route
       // recovers.
+      //
+      // A route that did NOT own the whole budget still gets a short,
+      // non-escalating TRANSIENT_COOLDOWN_MS bench below (no model-failure
+      // streak, no skip-platform bookkeeping) — otherwise a route that
+      // consistently lands late in the ladder (and so never accumulates
+      // HEDGE_BENCH_MIN_SILENT_FRACTION of the budget on its own) stalls and
+      // gets hedge-aborted on every request forever with zero penalty.
       if (isHedgeAbortError(err)) {
         const elapsedMs = Date.now() - startedAt;
         const attemptElapsedMs = Date.now() - attemptStartedAt;
@@ -1552,8 +1560,20 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
         if (ownedWholeBudget) {
           hooks.logFailure(route, err, attempt);
           recordRetryableFailure(route, err, hooks.state);
+        } else {
+          // The route only inherited the scraps of the budget earlier hops
+          // left it — not enough evidence for the full cooldown ladder /
+          // model-failure-streak / skip-platform bookkeeping recordRetryableFailure
+          // applies. But leaving it completely unpenalized let a route that
+          // reliably lands LATE in the ladder (and so never "owns" 75% of the
+          // budget) stall and get hedge-aborted on every request forever,
+          // since nothing ever benched it. A short, non-escalating cooldown —
+          // the same TRANSIENT_COOLDOWN_MS a plain timeout's first offense
+          // would get from the ordinary ladder anyway — gives the route a
+          // brief rest without the heavier full-bench treatment.
+          setCooldown(route.platform, route.modelId, route.keyId, TRANSIENT_COOLDOWN_MS, 'heuristic');
         }
-        console.log(`[FallbackLoop] retry time budget expired mid-attempt on ${route.platform}/${route.modelId} after ${(elapsedMs / 1000).toFixed(1)}s — rendering timedOut exhaustion ${ownedWholeBudget ? `and benching the route (silent for the whole ${budgetMs}ms budget)` : 'without benching'}`);
+        console.log(`[FallbackLoop] retry time budget expired mid-attempt on ${route.platform}/${route.modelId} after ${(elapsedMs / 1000).toFixed(1)}s — rendering timedOut exhaustion ${ownedWholeBudget ? `and benching the route (silent for the whole ${budgetMs}ms budget)` : `and applying a short ${Math.round(TRANSIENT_COOLDOWN_MS / 1000)}s cooldown (did not own the whole budget)`}`);
         hooks.onExhausted(
           exhaustedRetryError(lastError, maxRetries, { attempts, timedOut: true, budgetMs }),
           { attempts, timedOut: true },

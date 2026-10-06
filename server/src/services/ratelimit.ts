@@ -939,7 +939,10 @@ function clearCooldownHits(platform: string, modelId: string, keyId: number): vo
 }
 
 // Short cooldown for a transient (per-minute) 429 — recovers within ~one window.
-const TRANSIENT_COOLDOWN_MS = 90 * 1000;
+// Exported: fallback-loop.ts reuses this exact value as the light-touch bench
+// for a hedge-aborted attempt that did not own enough of the retry budget to
+// warrant the full recordRetryableFailure() treatment (see HEDGE_BENCH_MIN_SILENT_FRACTION).
+export const TRANSIENT_COOLDOWN_MS = 90 * 1000;
 
 // Ceiling for the null-limits escalation path. A provider that publishes no
 // RPD/TPD gives us no counter to check, so "daily-exhausted" there is inferred
