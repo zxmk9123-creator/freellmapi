@@ -70,6 +70,7 @@ const record = (over: Partial<Parameters<typeof formatAttemptDetail>[0][number]>
   startOffsetMs: 0,
   durationMs: 11,
   errorSummary: null,
+  httpStatus: null,
   ...over,
 });
 

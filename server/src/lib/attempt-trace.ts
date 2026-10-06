@@ -49,6 +49,12 @@ export interface AttemptTraceRecord {
   // lib/error-redaction.ts summarizeAttemptError — secrets scrubbed, capped at
   // 200 chars). Null for successful hops ('ok'/'committed').
   errorSummary: string | null;
+  // The upstream HTTP status that ended this attempt (err.status, set by
+  // providerHttpError — see providers/base.ts), when the failure was an
+  // actual HTTP response. Null for a successful hop, a transport-level
+  // failure with no response (network error, hedge-abort timeout), or any
+  // other error with no status code to report.
+  httpStatus: number | null;
 }
 
 export interface RequestTrace {

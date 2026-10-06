@@ -1464,6 +1464,7 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
         startOffsetMs: attemptStartedAt - startedAt,
         durationMs: Date.now() - attemptStartedAt,
         errorSummary: err != null ? summarizeAttemptError(err?.message) : null,
+        httpStatus: typeof err?.status === 'number' ? err.status : null,
       });
     };
 
