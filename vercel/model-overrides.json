@@ -1,0 +1,12 @@
+{
+  "models": [
+    { "platform": "nvidia", "modelId": "deepseek-ai/deepseek-v4-pro", "enabled": false },
+    { "platform": "nvidia", "modelId": "minimaxai/minimax-m2.7", "enabled": false },
+    { "platform": "nvidia", "modelId": "moonshotai/kimi-k2.6", "enabled": false },
+    { "platform": "ollama", "modelId": "cogito-2.1:671b", "enabled": false },
+    { "platform": "groq", "modelId": "groq/compound", "enabled": false },
+    { "platform": "openrouter", "modelId": "qwen/qwen3-coder:free", "enabled": false },
+    { "platform": "openrouter", "modelId": "moonshotai/kimi-k2.6:free", "enabled": false },
+    { "platform": "openrouter", "modelId": "openrouter/owl-alpha", "enabled": false }
+  ]
+}

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FreeLLMAPI Router</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f7f8fa; --card:#fff; --text:#1d2330; --muted:#667085; --line:#e4e7ec; --ok:#12805c; --bad:#c0392b; --accent:#2f6fde; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12151b; --card:#1b2029; --text:#e8ecf3; --muted:#9aa4b2; --line:#2b3240; --ok:#3ccf91; --bad:#ff7a6b; --accent:#7aa7ff; } }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:22px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 20px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin:0 0 14px; }
+  h2 { font-size:15px; margin:0 0 8px; }
+  code { background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:13px; word-break:break-all; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--muted); margin-right:6px; }
+  .ok .dot { background:var(--ok); } .bad .dot { background:var(--bad); }
+  input, textarea, button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; box-sizing:border-box; }
+  input, textarea { width:100%; } textarea { min-height:70px; resize:vertical; }
+  button { cursor:pointer; background:var(--accent); border-color:var(--accent); color:#fff; } button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:8px; margin:8px 0 0; flex-wrap:wrap; } pre { white-space:pre-wrap; word-break:break-word; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; margin:10px 0 0; max-height:320px; overflow:auto; font-size:13px; }
+  .muted { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FreeLLMAPI Router</h1>
+  <p class="sub">무료 LLM API를 묶어 OpenAI 호환 주소 하나로 제공하는 라우터 (Vercel 서버리스)</p>
+
+  <section><h2>상태</h2><span id="state"><span class="dot"></span>확인 중…</span> <span class="muted" id="when"></span></section>
+
+  <section>
+    <h2>연결 주소</h2>
+    <p>Base URL: <code id="base"></code></p>
+    <p class="muted">Chat: <code>POST /v1/chat/completions</code> · 모델 목록: <code>GET /v1/models</code> · 인증: <code>Authorization: Bearer &lt;통합 API 키&gt;</code></p>
+    <p class="muted">서버리스 배포라 관리용 대시보드와 키 편집 화면은 닫혀 있습니다. 설정은 Vercel 환경 변수(<code>FREEAPI_CONFIG_JSON</code>)로 바꿉니다.</p>
+  </section>
+
+  <section>
+    <h2>연결 테스트</h2>
+    <p class="muted">통합 API 키는 이 브라우저 탭 메모리에만 있고 저장되지 않습니다. 요청 헤더로만 전송됩니다.</p>
+    <input id="key" type="password" autocomplete="off" placeholder="통합 API 키 (freellmapi-…)">
+    <div class="row"><button id="models">모델 목록</button></div>
+    <textarea id="msg" placeholder="테스트 메시지" style="margin-top:10px">한 문장으로 자기소개를 해줘.</textarea>
+    <div class="row"><button id="send">메시지 보내기</button></div>
+    <pre id="out" hidden></pre>
+  </section>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  $('base').textContent = location.origin + '/v1';
+  async function ping() {
+    try {
+      const t = Date.now(); const r = await fetch('/api/ping', { cache: 'no-store' }); const j = await r.json();
+      $('state').className = r.ok ? 'ok' : 'bad';
+      $('state').innerHTML = '<span class="dot"></span>' + (r.ok ? '정상' : '오류 ' + r.status);
+      $('when').textContent = '응답 ' + (Date.now() - t) + 'ms · 서버 시각 ' + (j.timestamp || '');
+    } catch (e) { $('state').className = 'bad'; $('state').innerHTML = '<span class="dot"></span>연결 실패'; }
+  }
+  async function call(path, init, btn) {
+    const key = $('key').value.trim(); const out = $('out');
+    if (!key) { out.hidden = false; out.textContent = '통합 API 키를 입력해 주세요.'; return; }
+    btn.disabled = true; out.hidden = false; out.textContent = '요청 중… (콜드 스타트면 20초 이상 걸릴 수 있습니다)';
+    try {
+      const t = Date.now();
+      const r = await fetch(path, Object.assign({}, init, { headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key } }));
+      const text = await r.text(); let body = text; try { body = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
+      out.textContent = 'HTTP ' + r.status + ' · ' + (Date.now() - t) + 'ms\n\n' + body.slice(0, 4000);
+    } catch (e) { out.textContent = '요청 실패: ' + e.message; }
+    btn.disabled = false;
+  }
+  $('models').onclick = (e) => call('/v1/models', { method: 'GET' }, e.target);
+  $('send').onclick = (e) => call('/v1/chat/completions', { method: 'POST', body: JSON.stringify({ model: 'auto', max_tokens: 200, messages: [{ role: 'user', content: $('msg').value }] }) }, e.target);
+  ping();
+</script>
+</body>
+</html>
