@@ -29,7 +29,16 @@ async function boot() {
   return createApp(config);
 }
 
+// Serverless state is per instance and ephemeral, so the dashboard/admin API can neither persist anything nor be safely exposed: only the
+// OpenAI/Anthropic-compatible wire surface (/v1, /v1beta) and the unauthenticated liveness probe are reachable. Everything else is a 404.
+const PUBLIC_PATHS = [/^\/v1(\/|\?|$)/, /^\/v1beta(\/|\?|$)/, /^\/api\/ping(\?|$)/];
+
 export default async function handler(req, res) {
+  if (!PUBLIC_PATHS.some((re) => re.test(req.url || ''))) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'application/json');
+    return res.end(JSON.stringify({ error: { message: 'not found', type: 'not_found' } }));
+  }
   try {
     booting ||= boot();
     const app = await booting;

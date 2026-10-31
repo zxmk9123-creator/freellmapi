@@ -56,6 +56,11 @@ try {
   const bootMs = Date.now() - bootStart;
   assert.equal(ping.status, 200, `ping: ${ping.status} ${ping.text.slice(0, 200)}`);
 
+  for (const path of ['/', '/api/keys', '/api/auth/setup', '/api/settings']) {
+    const blocked = await call(path);
+    assert.equal(blocked.status, 404, `${path} must not be reachable on the serverless entry, got ${blocked.status}`);
+  }
+
   const noAuth = await call('/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'auto', messages: [{ role: 'user', content: 'ping' }] }) });
   assert.ok([401, 403].includes(noAuth.status), `a request without the unified key must be refused, got ${noAuth.status}`);
 
