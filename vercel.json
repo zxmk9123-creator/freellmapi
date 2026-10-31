@@ -1,0 +1,11 @@
+{
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build -w server",
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 300,
+      "includeFiles": "{server/dist/**,server/node_modules/**,shared/**,node_modules/better-sqlite3/**,node_modules/bindings/**,node_modules/file-uri-to-path/**,node_modules/@freellmapi/**}"
+    }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index.mjs" }]
+}
