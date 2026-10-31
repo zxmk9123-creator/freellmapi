@@ -5,6 +5,7 @@
 process.env.NODE_ENV ||= 'production';
 process.env.FREEAPI_DB_PATH ||= '/tmp/freeapi.db';
 process.env.TRUST_PROXY ||= '1'; // one proxy (Vercel's edge) in front: per-client rate limiting uses the real client IP
+process.env.FREELLMAPI_STATELESS_SESSIONS ||= '1'; // dashboard logins are signed tokens: another function instance has a different database
 
 import fs from 'node:fs';
 
@@ -73,9 +74,10 @@ async function boot() {
   return createApp(config);
 }
 
-// Serverless state is per instance and ephemeral, so the dashboard/admin API can neither persist anything nor be safely exposed: only the
-// OpenAI/Anthropic-compatible wire surface (/v1, /v1beta) and the unauthenticated liveness probe are reachable. Everything else is a 404.
-const PUBLIC_PATHS = [/^\/v1(\/|\?|$)/, /^\/v1beta(\/|\?|$)/, /^\/api\/ping(\?|$)/];
+// Reachable: the OpenAI/Anthropic-compatible wire surface (/v1, /v1beta, each behind the unified API key), the dashboard's own API (/api/*, every
+// route behind a dashboard login except /api/auth/* and /api/ping) and nothing else — the dashboard's static files are served by Vercel itself.
+// Dashboard changes persist through the same encrypted backup as the learned router state (flushed after every write request).
+const PUBLIC_PATHS = [/^\/v1(\/|\?|$)/, /^\/v1beta(\/|\?|$)/, /^\/api(\/|\?|$)/];
 
 export default async function handler(req, res) {
   if (!PUBLIC_PATHS.some((re) => re.test(req.url || ''))) {
@@ -86,7 +88,7 @@ export default async function handler(req, res) {
   try {
     booting ||= boot();
     const app = await booting;
-    if (req.method === 'POST') res.once('finish', () => keepAlive(flushBackup().catch((err) => console.warn(`[vercel] backup failed: ${err && err.message ? err.message : err}`))));
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) res.once('finish', () => keepAlive(flushBackup().catch((err) => console.warn(`[vercel] backup failed: ${err && err.message ? err.message : err}`))));
     return app(req, res);
   } catch (err) {
     booting = undefined; // let the next request retry the boot

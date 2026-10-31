@@ -1,6 +1,6 @@
 {
   "installCommand": "npm ci --include=dev",
-  "buildCommand": "npm run build -w server && mkdir -p public && touch public/.placeholder",
+  "buildCommand": "npm run build -w server && npm run build -w client && rm -rf public && mkdir -p public && cp -r client/dist/. public/ && cp vercel/status.html public/status.html",
   "functions": {
     "api/index.mjs": {
       "maxDuration": 300,
@@ -9,8 +9,20 @@
   },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/(.*)",
       "destination": "/api/index.mjs"
+    },
+    {
+      "source": "/v1/(.*)",
+      "destination": "/api/index.mjs"
+    },
+    {
+      "source": "/v1beta/(.*)",
+      "destination": "/api/index.mjs"
+    },
+    {
+      "source": "/((?!api/|v1/|v1beta/).*)",
+      "destination": "/index.html"
     }
   ]
 }
